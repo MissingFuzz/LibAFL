@@ -14,6 +14,13 @@ codegen-units = 1
 opt-level = 3
 debug = true
 
+[profile.release-thin]
+inherits = "release"
+lto = false
+codegen-units = 16
+opt-level = 3
+debug = true
+
 [build-dependencies]
 cc = { version = "1.0", features = ["parallel"] }
 which = "4.1"
@@ -28,7 +35,7 @@ reqwest = { version = "0.11.4", features = ["blocking"] }
 [dependencies]
 libafl = { path = "../../libafl/", features = [ "std", "llmp_compression", "llmp_bind_public", "frida_cli" ] } #,  "llmp_small_maps", "llmp_debug"]}
 capstone = "0.11.0"
-frida-gum = { version = "0.8.1", features = [ "auto-download", "event-sink", "invocation-listener"] }
+frida-gum = { version = "0.10.0", features = [ "auto-download", "event-sink", "invocation-listener"] }
 libafl_frida = { path = "../../libafl_frida", features = ["cmplog"] }
 libafl_targets = { path = "../../libafl_targets", features = ["sancov_cmplog"] }
 libc = "0.2"

@@ -2,7 +2,7 @@
 [env]
 CARGO_TARGET_DIR = { value = "target", condition = { env_not_set = ["CARGO_TARGET_DIR"] } }
 FUZZER_NAME={ source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "frida_fuzzer", mapping = {"linux" = "frida_fuzzer", "macos" = "frida_fuzzer", "windows" = "frida_fuzzer.exe"} }
-
+THIN = {value = "true", condition = { env = { "CARGO_MAKE_CRATE_TARGET_TRIPLE" = "aarch64-unknown-linux-gnu"}}}
 
 [tasks.unsupported]
 script_runner="@shell"
@@ -66,9 +66,21 @@ mac_alias = "fuzzer_unix"
 windows_alias = "fuzzer_windows"
 
 [tasks.fuzzer_unix]
+dependencies = [ "fuzzer_unix_thin", "fuzzer_unix_full" ]
+
+[tasks.fuzzer_unix_thin]
+condition = {env_set=["THIN"]}
 script_runner="@shell"
 script='''
-cargo build --release
+cargo build --profile release-thin
+cp ${CARGO_TARGET_DIR}/release-thin/${FUZZER_NAME} .
+'''
+
+[tasks.fuzzer_unix_full]
+condition = {env_not_set=["THIN"]}
+script_runner="@shell"
+script='''
+cargo build --profile release
 cp ${CARGO_TARGET_DIR}/release/${FUZZER_NAME} .
 '''
 
