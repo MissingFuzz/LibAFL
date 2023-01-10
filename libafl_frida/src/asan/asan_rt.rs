@@ -1668,11 +1668,18 @@ impl AsanRuntime {
         );
 
         let blob = ops.finalize().unwrap();
-        let mut map_flags = MapFlags::MAP_ANON | MapFlags::MAP_PRIVATE;
+
+        let mut map_flags = MapFlags::MAP_FILE;
 
         // apple aarch64 requires MAP_JIT to allocates WX pages
-        if cfg!(all(target_vendor = "apple", target_arch = "aarch64")) {
-            map_flags |= MapFlags::MAP_JIT;
+        #[cfg(all(target_vendor = "apple", target_arch = "aarch64"))]
+        {
+            map_flags |= MapFlags::MAP_ANON | MapFlags::MAP_PRIVATE | MapFlags::MAP_JIT;
+        }
+
+        #[cfg(not(all(target_vendor = "apple", target_arch = "aarch64")))]
+        {
+            map_flags |= MapFlags::MAP_ANON | MapFlags::MAP_PRIVATE;
         }
 
         unsafe {
@@ -2314,7 +2321,7 @@ impl AsanRuntime {
         scale: i32,
         disp: i64,
     ) {
-        let redzone_size = i64::from(frida_gum_sys::GUM_RED_ZONE_SIZE);
+        let redzone_size = i64::from(frida_gum_sys::GUM_RED_ZONE_SIZE) as isize;
         let writer = output.writer();
         let true_rip = address;
 
@@ -2437,7 +2444,7 @@ impl AsanRuntime {
 
         // Finally set Rdi to base + index * scale + disp
         writer.put_add_reg_reg(X86Register::Rdi, X86Register::Rsi);
-        writer.put_lea_reg_reg_offset(X86Register::Rdi, X86Register::Rdi, disp);
+        writer.put_lea_reg_reg_offset(X86Register::Rdi, X86Register::Rdi, disp as isize);
 
         writer.put_mov_reg_address(X86Register::Rsi, true_rip); // load true_rip into rsi in case we need them in handle_trap
         writer.put_push_reg(X86Register::Rsi); // save true_rip
