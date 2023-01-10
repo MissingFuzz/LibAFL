@@ -86,8 +86,13 @@ where
                 self.followed = true;
                 let transformer = self.helper.transformer();
                 self.stalker.follow_me::<NoneEventSink>(transformer, None);
+
+                if let Some(observer) = self.helper.observer() {
+                    self.stalker.set_observer(observer);
+                }
             }
         }
+        self.stalker.set_trust_threshold(0);
         let res = self.base.run_target(fuzzer, state, mgr, input);
         if self.helper.stalker_enabled() {
             self.stalker.deactivate();
@@ -156,7 +161,11 @@ where
         base: InProcessExecutor<'a, H, OT, S>,
         helper: &'c mut FridaInstrumentationHelper<'b, RT>,
     ) -> Self {
-        let mut stalker = Stalker::new(gum);
+        #[cfg(target_arch = "x86_64")]
+        let mut stalker = Stalker::new_with_params(gum, 32, 32);
+
+        #[cfg(target_arch = "aarch64")]
+        let mut stalker = Stalker::new_with_params(gum, 32);
         // Include the current module (the fuzzer) in stalked ranges. We clone the ranges so that
         // we don't add it to the INSTRUMENTED ranges.
         let mut ranges = helper.ranges().clone();

@@ -28,7 +28,7 @@ use rangemap::RangeMap;
 
 #[cfg(all(feature = "cmplog", target_arch = "aarch64"))]
 use crate::cmplog_rt::CmpLogRuntime;
-use crate::coverage_rt::CoverageRuntime;
+use crate::coverage_rt::{CoverageObserver, CoverageRuntime};
 #[cfg(unix)]
 use crate::{asan::asan_rt::AsanRuntime, drcov_rt::DrCovRuntime};
 
@@ -435,5 +435,14 @@ where
     #[inline]
     pub fn options(&self) -> &FuzzerOptions {
         self.options
+    }
+
+    /// Return the ref to the stalker observer
+    pub fn observer(&mut self) -> Option<&mut CoverageObserver> {
+        let rt = self.runtime_mut::<CoverageRuntime>();
+        match rt {
+            Some(c) => Some(c.observer()),
+            None => None,
+        }
     }
 }
