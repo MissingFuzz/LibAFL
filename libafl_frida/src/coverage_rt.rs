@@ -349,14 +349,36 @@ impl StalkerObserver for CoverageObserver {
         }
 
         let tgt = unsafe { &mut *(target as *mut frida_gum_sys::gpointer as *mut u64) };
-        if let Some(size) = self.blocks.get(tgt) {
-            #[cfg(target_arch = "x86_64")]
-            {
+        #[cfg(target_arch = "x86_64")]
+        {
+            if let Some(size) = self.blocks.get(tgt) {
                 *tgt += *size as u64;
             }
-            #[cfg(target_arch = "aarch64")]
-            {
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            // On AARCH64, when we jump from one instrumented basic block to the next, if
+            // we are unable to use a near jump, then we need to use a register in order to
+            // store the target address. Therefore before each such long jump, we push some
+            // registers to the stack so that we can use them to perform the branch. This
+            // means that each basic block is prefixed (by the Stalker engine) with an
+            // instruction to restore these registers from the stack. If, however, the
+            // distance between blocks is small enough, we can use a near jump, in this case,
+            // we don't need to spill any registers into the stack, and we can simply jump
+            // at the block, skipping the first instruction.
+            //
+            // The inline assembly generated for AARCH64 also includes a copy of the
+            // instruction to restore the spilt registers from the stack at the end of the
+            // preamble written to generate coverage (which is skipped over in the default
+            // case). Accordingly, when we want to omit the coverage as a result of a
+            // deterministic branch, we either execute or skip over this instruction to
+            // restore the spilt registers depending on the original offset within the
+            // block the target would have branch to.
+            if let Some(size) = self.blocks.get(tgt) {
                 *tgt += (*size - 4) as u64;
+            } else if let Some(size) = self.blocks.get(&(*tgt + 4)) {
+                *tgt += *size as u64;
             }
         }
     }
