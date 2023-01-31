@@ -31,7 +31,7 @@ frida-gum-sys = { path = "../../frida-rust/frida-gum-sys/", features = [ "auto-d
 frida-gum = { path = "../../frida-rust/frida-gum/", features = [ "auto-download", "event-sink", "invocation-listener", "stalker-observer", "stalker-params"] }
 regex = "1"
 dynasmrt = "1.2"
-capstone = "0.11.0"
+capstone = { path = "../../capstone-rs/capstone-rs" }
 color-backtrace ={ version = "0.5", features = [ "resolve-modules" ] }
 termcolor = "1.1.3"
 serde = "1.0"
