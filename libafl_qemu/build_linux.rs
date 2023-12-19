@@ -74,8 +74,15 @@ pub fn build() {
         println!("cargo:rerun-if-changed={}", qasan_dir.display());
 
         let mut make = Command::new("make");
+        let mut cflags = vec![];
+        if cfg!(feature = "gasan_compact_shadow") {
+            cflags.push("-DASAN_COMPACT");
+        }
         if cfg!(debug_assertions) {
-            make.env("CFLAGS", "-DDEBUG=1");
+            cflags.push("-DDEBUG");
+        }
+        if !cflags.is_empty() {
+            make.env("CFLAGS", cflags.join(" "));
         }
         assert!(make
             .current_dir(out_dir_path)

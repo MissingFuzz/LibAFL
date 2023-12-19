@@ -172,6 +172,9 @@ pub fn build(
             if cfg!(feature = "debug_assertions") {
                 cmd.arg("--enable-debug");
             }
+            if cfg!(feature = "gasan_compact_shadow") {
+                cmd.arg("--extra-cflags=-DASAN_COMPACT");
+            }
             cmd.status().expect("Configure failed");
         } else if !custom_qemu_no_configure {
             let mut cmd = Command::new("./configure");

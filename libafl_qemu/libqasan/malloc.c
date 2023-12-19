@@ -52,13 +52,18 @@ typedef struct {
 
 #endif
 
-#define ALLOC_ALIGN_SIZE (_Alignof(max_align_t))
+#ifdef ASAN_COMPACT
+# define ALLOC_ALIGN_SIZE (128UL)
+#else
+# define ALLOC_ALIGN_SIZE (_Alignof(max_align_t))
+#endif
 
 struct chunk_begin {
   size_t              requested_size;
   void               *aligned_orig;  // NULL if not aligned
   struct chunk_begin *next;
   struct chunk_begin *prev;
+  __attribute__((aligned(ALLOC_ALIGN_SIZE)))
   char                redzone[REDZONE_SIZE];
 
 } __attribute__((packed));
@@ -66,7 +71,6 @@ struct chunk_begin {
 struct chunk_struct {
   struct chunk_begin begin;
   char               redzone[REDZONE_SIZE];
-  size_t             prev_size_padding;
 
 } __attribute__((packed));
 

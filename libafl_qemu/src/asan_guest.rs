@@ -126,21 +126,41 @@ pub struct QemuAsanGuestHelper {
 
 #[cfg(any(feature = "aarch64", feature = "x86_64", feature = "clippy"))]
 impl QemuAsanGuestHelper {
-    const HIGH_SHADOW_START: GuestAddr = 0x02008fff7000;
-    const HIGH_SHADOW_END: GuestAddr = 0x10007fff7fff;
-    const LOW_SHADOW_START: GuestAddr = 0x00007fff8000;
-    const LOW_SHADOW_END: GuestAddr = 0x00008fff6fff;
+    const HIGH_MEM_START: GuestAddr = 0x10007fff8000;
+    const HIGH_MEM_END: GuestAddr = 0x7fffffffffff;
+    const LOW_MEM_START: GuestAddr = 0x000000000000;
+    const LOW_MEM_END: GuestAddr = 0x00007fff7fff;
+    const KOFFSET: GuestAddr = 0x7fff8000;
 }
 
 #[cfg(any(feature = "arm", feature = "i386", feature = "mips", feature = "ppc"))]
 impl QemuAsanGuestHelper {
-    const HIGH_SHADOW_START: GuestAddr = 0x28000000;
-    const HIGH_SHADOW_END: GuestAddr = 0x3fffffff;
-    const LOW_SHADOW_START: GuestAddr = 0x20000000;
-    const LOW_SHADOW_END: GuestAddr = 0x23ffffff;
+    const HIGH_MEM_START: GuestAddr = 0x40000000;
+    const HIGH_MEM_END: GuestAddr = 0xffffffff;
+    const LOW_MEM_START: GuestAddr = 0x00000000;
+    const LOW_MEM_END: GuestAddr = 0x1fffffff;
+    const KOFFSET: GuestAddr = 0x20000000;
+}
+
+#[cfg(feature = "gasan_compact_shadow")]
+impl QemuAsanGuestHelper {
+    const ALLOC_ALIGN_POW: usize = 7;
+}
+
+#[cfg(not(feature = "gasan_compact_shadow"))]
+impl QemuAsanGuestHelper {
+    const ALLOC_ALIGN_POW: usize = 3;
 }
 
 impl QemuAsanGuestHelper {
+    const HIGH_SHADOW_START: GuestAddr =
+        (Self::HIGH_MEM_START >> Self::ALLOC_ALIGN_POW) + Self::KOFFSET;
+    const HIGH_SHADOW_END: GuestAddr =
+        (Self::HIGH_MEM_END >> Self::ALLOC_ALIGN_POW) + Self::KOFFSET;
+    const LOW_SHADOW_START: GuestAddr =
+        (Self::LOW_MEM_START >> Self::ALLOC_ALIGN_POW) + Self::KOFFSET;
+    const LOW_SHADOW_END: GuestAddr = (Self::LOW_MEM_END >> Self::ALLOC_ALIGN_POW) + Self::KOFFSET;
+
     #[must_use]
     pub fn default(emu: &Emulator, asan: String) -> Self {
         Self::new(emu, asan, QemuInstrumentationAddressRangeFilter::None)
@@ -152,6 +172,12 @@ impl QemuAsanGuestHelper {
         asan: String,
         filter: QemuInstrumentationAddressRangeFilter,
     ) -> Self {
+        #[cfg(feature = "gasan_compact_shadow")]
+        println!("Asan Guest Compact Mode");
+
+        #[cfg(not(feature = "gasan_compact_shadow"))]
+        println!("Asan Guest NOT Compact Mode");
+
         for mapping in emu.mappings() {
             println!("mapping: {mapping:#?}");
         }
@@ -168,12 +194,26 @@ impl QemuAsanGuestHelper {
         mappings
             .iter()
             .find(|m| m.start <= Self::HIGH_SHADOW_START && m.end > Self::HIGH_SHADOW_END)
-            .expect("HighShadow not found, confirm ASAN DSO is loaded in the guest");
+            .expect(
+                format!(
+                    "HighShadow not found, confirm ASAN DSO is loaded in the guest: 0x{:x}-0x{:x}",
+                    Self::HIGH_SHADOW_START,
+                    Self::HIGH_SHADOW_END
+                )
+                .as_str(),
+            );
 
         mappings
             .iter()
             .find(|m| m.start <= Self::LOW_SHADOW_START && m.end > Self::LOW_SHADOW_END)
-            .expect("LowShadow not found, confirm ASAN DSO is loaded in the guest");
+            .expect(
+                format!(
+                    "LowShadow not found, confirm ASAN DSO is loaded in the guest: 0x{:x}-0x{:x}",
+                    Self::LOW_SHADOW_START,
+                    Self::LOW_SHADOW_END
+                )
+                .as_str(),
+            );
 
         let mappings = mappings
             .iter()

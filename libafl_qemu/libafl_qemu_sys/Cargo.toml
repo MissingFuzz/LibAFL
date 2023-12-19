@@ -34,6 +34,7 @@ slirp = [ "systemmode", "libafl_qemu_build/slirp" ] # build qemu with host libsl
 shared = [ "libafl_qemu_build/shared" ]
 
 clippy = [ "libafl_qemu_build/clippy" ] # special feature for clippy, don't use in normal projects§
+gasan_compact_shadow = [ "libafl_qemu_build/gasan_compact_shadow"]
 
 [dependencies]
 

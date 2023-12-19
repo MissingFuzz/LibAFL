@@ -68,30 +68,52 @@ inline size_t qasan_align_up(size_t val, size_t align) {
 }
 
 #ifdef ASAN_GUEST
+#define PAGE_SIZE (1UL << 12)
+
 static void __libqasan_map_shadow(void * addr, void * limit) {
-  size_t size = (limit - addr) + 1;
-  void * map = mmap(addr, size, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_FIXED_NOREPLACE | MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-  if (map != addr) {
-    QASAN_LOG ("Failed to map shadow: %p-%p, errno: %d", addr, limit + 1, errno);
+  void * align_addr = qasan_align_down (addr, PAGE_SIZE);
+  void * align_limit = qasan_align_up (limit, PAGE_SIZE);
+  size_t align_size = (align_limit - align_addr);
+  void * map = mmap(align_addr, align_size, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_FIXED_NOREPLACE | MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+  if (map != align_addr) {
+    QASAN_LOG ("Failed to map shadow: %p-%p [%p-%p], errno: %d", addr, limit, align_addr, align_limit, errno);
     abort();
   }
 
-  if (madvise (addr, size, MADV_HUGEPAGE) != 0) {
-    QASAN_LOG ("Failed to madvise (MADV_HUGEPAGE) shadow: %p-%p, errno: %d", addr, limit + 1, errno);
+  if (madvise (align_addr, align_size, MADV_HUGEPAGE) != 0) {
+    QASAN_LOG ("Failed to madvise (MADV_HUGEPAGE) shadow: %p-%p [%p-%p], errno: %d", addr, limit, align_addr, align_limit, errno);
     abort();
   }
 }
 #endif
 
 #ifdef ASAN_GUEST
-
-const size_t ALLOC_ALIGN_POW = 3;
-const size_t ALLOC_ALIGN_SIZE = (1UL << ALLOC_ALIGN_POW);
-# if defined(__x86_64__) || defined(__aarch64__)
-# define SHADOW_OFFSET (0x7fff8000)
+# ifdef ASAN_COMPACT
+const size_t ALLOC_ALIGN_POW = 7;
 # else
-# define SHADOW_OFFSET (0x20000000)
+const size_t ALLOC_ALIGN_POW = 3;
 # endif
+
+# if defined(__x86_64__) || defined(__aarch64__)
+const size_t HIGH_MEM_START = 0x10007fff8000;
+const size_t HIGH_MEM_END = 0x7fffffffffff;
+const size_t LOW_MEM_START = 0x000000000000;
+const size_t LOW_MEM_END = 0x00007fff7fff;
+const size_t SHADOW_OFFSET = 0x7fff8000;
+# else
+const size_t HIGH_MEM_START = 0x40000000;
+const size_t HIGH_MEM_END = 0xffffffff;
+const size_t LOW_MEM_START = 0x00000000;
+const size_t LOW_MEM_END = 0x1fffffff;
+const size_t SHADOW_OFFSET = 0x20000000;
+# endif
+
+const size_t HIGH_SHADOW_START = (HIGH_MEM_START >> ALLOC_ALIGN_POW) + SHADOW_OFFSET;
+const size_t HIGH_SHADOW_END = (HIGH_MEM_END >> ALLOC_ALIGN_POW) + SHADOW_OFFSET;
+const size_t LOW_SHADOW_START = (LOW_MEM_START >> ALLOC_ALIGN_POW) + SHADOW_OFFSET;
+const size_t LOW_SHADOW_END = (LOW_MEM_END >> ALLOC_ALIGN_POW) + SHADOW_OFFSET;
+const size_t ALLOC_ALIGN_SIZE = (1UL << ALLOC_ALIGN_POW);
+
 #endif
 
 __attribute__((constructor)) void __libqasan_init() {
@@ -116,28 +138,14 @@ __attribute__((constructor)) void __libqasan_init() {
 
 #ifdef ASAN_GUEST
   QASAN_DEBUG("QASAN - Debugging is enabled!!!\n");
+# ifdef ASAN_COMPACT
+  QASAN_LOG("ASAN - Compact Mode\n");
+# else 
+  QASAN_LOG("ASAN - NOT Compact Mode\n");
+# endif
   /* MMap our shadow and madvise to use huge pages */
-#if defined(__x86_64__) || defined(__aarch64__)
-  // [0x10007fff8000, 0x7fffffffffff] 	HighMem
-  // [0x02008fff7000, 0x10007fff7fff] 	HighShadow
-  // [0x00008fff7000, 0x02008fff6fff] 	ShadowGap
-  // [0x00007fff8000, 0x00008fff6fff] 	LowShadow
-  // [0x000000000000, 0x00007fff7fff] 	LowMem
-  __libqasan_map_shadow ((void*)0x02008fff7000, (void*)0x10007fff7fff);
-  __libqasan_map_shadow ((void*)0x00007fff8000, (void*)0x00008fff6fff);
-
-#else
-  // [0x40000000, 0xffffffff] 	HighMem
-  // [0x28000000, 0x3fffffff] 	HighShadow
-  // [0x24000000, 0x27ffffff] 	ShadowGap
-  // [0x20000000, 0x23ffffff] 	LowShadow
-  // [0x00000000, 0x1fffffff] 	LowMem
-  __libqasan_map_shadow ((void*)0x28000000, (void*)0x3fffffff);
-  __libqasan_map_shadow ((void*)0x20000000, (void*)0x23ffffff);
-#endif
-
-
-
+  __libqasan_map_shadow ((void*)HIGH_SHADOW_START, (void*)HIGH_SHADOW_END);
+  __libqasan_map_shadow ((void*)LOW_SHADOW_START, (void*)LOW_SHADOW_END);
 #endif
 
   // if (__qasan_log) { __libqasan_print_maps(); }

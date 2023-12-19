@@ -25,6 +25,7 @@ shared = []
 slirp = [] # build qemu with host libslirp (for user networking)
 
 clippy = [] # special feature for clippy, don't use in normal projects§
+gasan_compact_shadow = []
 
 [dependencies]
 bindgen = "0.68"
